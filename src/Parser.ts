@@ -5,6 +5,12 @@ import { IAuthor, IPagingResults, IResult, ISubmission } from "./interfaces";
 import { browse, gallery, scraps, search, submission, submissions } from ".";
 import { BrowseOptions, ENDPOINT, FaveSubmission, SearchOptions, SubmissionsOptions, RequestToggleWatch } from "./Request";
 
+export class FASystemError extends Error {
+  constructor(message: string) {
+    super(message)
+  }
+}
+
 /**
  * Convert author name to author id
  * @param name author name
@@ -26,7 +32,14 @@ function checkSystemMessage($: CheerioStatic) {
   const noticeMessage = $("section.notice-message");
   if (noticeMessage.length !== 0) {
     const systemMessage = noticeMessage[0].childNodes[1].childNodes[3].childNodes[0].nodeValue;
-    throw new Error(systemMessage);
+    throw new FASystemError(systemMessage);
+  }
+
+  // Check system error
+  const title = $("head title");
+  if (title[0].firstChild.data === "System Error") {
+    const sectionBody = $("section .section-body")
+    throw new FASystemError(sectionBody[0].firstChild.data?.trim() || "Unknown error.");
   }
 }
 
@@ -36,14 +49,14 @@ function checkSystemMessage($: CheerioStatic) {
  */
 export function ParseFigure(figure: CheerioElement, selector: Cheerio): IResult {
   const id: string = figure.attribs.id.split("-").pop() ?? "";
-  const thumb: string = "http:" + figure.childNodes[0].childNodes[0].childNodes[0].childNodes[0].attribs.src;
+  const thumb: string = "http:" + figure.childNodes[1].childNodes[1].childNodes[1].childNodes[1].attribs.src;
   const authorName = selector.find("figcaption p:last-child a").first().attr().title;
   const authorId = convertNameToId(authorName);
 
   return {
     type: SubmissionType[classNames(figure)[1].split("-").pop() as keyof typeof SubmissionType],
     id,
-    title: figure.childNodes[1].childNodes[0].childNodes[0].childNodes[0]?.nodeValue ?? "",
+    title: figure.childNodes[3].childNodes[1].childNodes[1].childNodes[0]?.nodeValue ?? "",
     url: `${ENDPOINT}/view/${id}`,
     rating:
       Rating[
@@ -329,6 +342,7 @@ export function ParseSubmission(body: string, id: string): ISubmission {
     downloadUrl,
     previewUrl,
     keywords: tags
+      .filter((index, tag) => tag.attribs.href !== "javascript:void(0);")
       .map((index, tag) => {
         return tag.childNodes[0].data?.trim() ?? "";
       })
